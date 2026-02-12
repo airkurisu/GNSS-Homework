@@ -1,31 +1,34 @@
 /*
-* main.cpp - 项目入口文件 (Modified)
+* main.cpp - 项目入口文件
  */
 #include <iostream>
 #include <vector>
 #include <iomanip>
 #include <string>
 #include "rinex.h"
-#include "spp.h"       // 原 GPS SPP
-#include "spp_gnss.h"  // 新 GNSS SPP
+#include "spp.h"
+#include "spp_gnss.h"
 
 using namespace std;
 
 int main() {
-    freopen("out.txt", "w", stdout); // 调试时可开启
+    int mode = 2;
+    //if (mode==1)
+    //    freopen("out_gps.txt", "w", stdout);
+    //else
+    //    freopen("out_multi-gnss.txt", "w", stdout);
 
     // 简单交互菜单
-    int mode = 1;
+
     cout << "Select Processing Mode:" << endl;
-    cout << "1. GPS-Only SPP (Original)" << endl;
+    cout << "1. GPS-Only SPP " << endl;
     cout << "2. Multi-GNSS SPP (GPS/BDS/GAL)" << endl;
     cout << "Enter choice [1-2]: ";
-    //cin >> mode;
 
     string nav_file = "data/brdc1590.24p";
     string obs_file = "data/jfng1590.24o";
 
-    // ...读取逻辑不变...
+
     cout << "Step 1: Reading Navigation file..." << endl;
     auto navList = readNavFile(nav_file);
     if (navList.empty()) return 1;

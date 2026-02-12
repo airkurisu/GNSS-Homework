@@ -1,61 +1,55 @@
 /*
-* rinex.h - RINEX 3.04 数据结构与读取接口声明
- * 更新：增加多普勒观测值 (D1, D2) 支持，用于速度解算
- */
+* include/rinex.h - RINEX 3.04 数据结构
+* 修复记录:
+* 1. 保持结构体对齐，确保 NavData 包含 freq_num
+*/
 
 #ifndef MYGNSS10_RINEX_H
 #define MYGNSS10_RINEX_H
 
 #include <vector>
 #include <string>
-#include <iostream>
+#include <map>
 #include "gtime.h"
 
-// --- 导航星历结构体 (NavData) ---
-// 对应广播星历文件 (.24p) 中的一条记录
+// --- 导航星历结构体 ---
 struct NavData {
-    int sat;        // 卫星号 (PRN)
-    char sys;       // 卫星系统 (G:GPS, C:BDS, E:GAL, R:GLO)
+    int sat;        // PRN
+    char sys;       // System (G/C/E/R)
+    GPSTime toe;    // Time of Ephemeris
+    GPSTime toc;    // Time of Clock
 
-    GPSTime toe;    // 星历参考时刻 (Time of Ephemeris)
-    GPSTime toc;    // 钟差参考时刻 (Time of Clock)
-
-    // 卫星钟差参数 (对应文件第1行)
+    // 钟差参数
     double a0, a1, a2;
 
-    // --- 广播轨道参数 ---
-    double crs, delta_n, M0;
-    double cuc, e, cus, sqrtA;
-    double cic, Omega0, cis;
+    // 轨道参数 (兼容 Kepler 和 GLONASS State Vector)
+    // 变量名复用以保持内存紧凑
+    double crs, delta_n, M0;   // GLO: X, Vx, Ax
+    double cuc, e, cus, sqrtA; // GLO: Y, Vy, Ay, FreqNum (via helper)
+    double cic, Omega0, cis;   // GLO: Z, Vz, Az
     double i0, crc, omega, OmegaDot;
     double IDot;
 
-    // --- 重要修正参数 ---
-    double tgd;     // 群延迟 (Total Group Delay)
+    double tgd;     // TGD (BDS/GPS)
+    int freq_num;   // GLONASS 频率号 (关键: 用于计算波长)
 };
 
-// --- 观测数据结构体 (ObsData) ---
-// 对应观测文件 (.24o) 中某一历元下的一颗卫星
+// --- 观测数据结构体 ---
 struct ObsData {
-    GPSTime time;   // 观测时刻 (接收机时间)
-    int sat;        // 卫星号
-    char sys;       // 卫星系统 (G/C/E/R)
+    GPSTime time;
+    int sat;
+    char sys;
 
-    // --- 伪距观测值 (单位: 米) ---
-    // P1: L1/B1/E1/G1 频段
-    // P2: L2/B3/E5a/G2 频段
-    double P1;
-    double P2;
+    // 核心观测值
+    double P1, P2;  // Pseudorange (m)
+    double D1, D2;  // Doppler (Hz)
 
-    // --- 多普勒观测值 (单位: Hz) ---
-    // 用于接收机速度估计
-    double D1;
-    double D2;
+    // 观测码类型 (调试用)
+    std::string codeP1, codeP2;
 };
 
 // --- 函数声明 ---
-
 std::vector<NavData> readNavFile(const std::string& filename);
 std::vector<std::vector<ObsData>> readObsFile(const std::string& filename, double* approxPos);
 
-#endif // GNSS_SPP_RINEX_H
+#endif // MYGNSS10_RINEX_H
