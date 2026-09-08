@@ -1,12 +1,30 @@
 cmake_minimum_required(VERSION 3.20)
-project(mygnss10)
+project(mygnss10 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 14)
-include_directories(include)
-file(GLOB SRC_FILES "src/*.cpp")
-file(GLOB HEADER_FILES "include/*.h")
-add_executable(mygnss10
-        main.cpp
-        ${SRC_FILES}
-        ${HEADER_FILES}
-)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+add_library(gnss_core
+    src/gtime.cpp src/matrix.cpp src/orbit.cpp src/rinex.cpp
+    src/spp.cpp src/spp_gnss.cpp src/tropo.cpp)
+target_include_directories(gnss_core PUBLIC include)
+if(MSVC)
+    target_compile_options(gnss_core PRIVATE /W4 /utf-8)
+else()
+    target_compile_options(gnss_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_executable(mygnss10 main.cpp)
+target_link_libraries(mygnss10 PRIVATE gnss_core)
+add_executable(gnss_state_dump tools/state_dump.cpp)
+target_link_libraries(gnss_state_dump PRIVATE gnss_core)
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(gnss_tests tests/test_gnss.cpp)
+    target_link_libraries(gnss_tests PRIVATE gnss_core)
+    target_compile_definitions(gnss_tests PRIVATE GNSS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME gnss_regression COMMAND gnss_tests)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME offline_reference_tools
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_precise_tools.py")
+    endif()
+endif()

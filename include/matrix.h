@@ -31,4 +31,8 @@ void matmul(const char *tr, int n, int k, int m, double alpha,
  */
 int matinv(double *A, int n);
 
+// Weighted least squares using Householder QR; rejects rank-deficient geometry.
+// H is row-major (rows x cols); weights are positive inverse variances.
+bool leastSquares(const double* H, const double* residual, const double* weights,
+                  int rows, int cols, double* solution);
 #endif // MYGNSS10_MATRIX_H
