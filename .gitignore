@@ -22,3 +22,6 @@ out_multi-gnss.txt
 
 *.obj
 *.o
+/build*/
+*.csv
+__pycache__/

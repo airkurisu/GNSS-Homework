@@ -11,6 +11,7 @@ struct GPSTime {
 GPSTime epoch2time(const double *ep);
 void time2epoch(GPSTime t, double *ep);
 double timediff(GPSTime t1, GPSTime t2);
+GPSTime timeadd(GPSTime t, double seconds);
 GPSTime gpst2utc(GPSTime t);
 GPSTime utc2gpst(GPSTime t);
 double str2num(const char *s, int i, int n);

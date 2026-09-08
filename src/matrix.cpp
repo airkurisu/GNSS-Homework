@@ -47,6 +47,13 @@ void matmul(const char *tr, int n, int k, int m, double alpha,
 
 // 矩阵求逆 (Gauss-Jordan, Row-Major)
 int matinv(double *A, int n) {
+    if (n < 1) return -1;
+    double scale = 0;
+    for (int q=0; q<n*n; ++q) {
+        if (!std::isfinite(A[q])) return -1;
+        scale = std::max(scale, std::fabs(A[q]));
+    }
+    if (scale == 0) return -1;
     int i, j, k;
     // 记录行交换、列交换和主元状态
     vector<int> indxc(n), indxr(n), ipiv(n, 0);
@@ -71,7 +78,7 @@ int matinv(double *A, int n) {
             }
         }
 
-        if (irow == -1 || icol == -1 || big == 0.0) return -1; // 奇异矩阵
+        if (irow == -1 || icol == -1 || big <= scale * 1e-12) return -1; // 奇异矩阵
         ipiv[icol]++;
 
         // 2. 交换行 (将主元行 irow 换到 icol 位置)
@@ -114,4 +121,46 @@ int matinv(double *A, int n) {
     }
 
     return 0;
+}
+
+bool leastSquares(const double* H, const double* residual, const double* weights,
+                  int rows, int cols, double* solution) {
+    if (cols<1 || rows<cols) return false;
+    std::vector<double> a(rows*cols), b(rows);
+    double scale=0;
+    for (int i=0; i<rows; ++i) {
+        if (!std::isfinite(weights[i]) || weights[i]<=0 || !std::isfinite(residual[i])) return false;
+        const double w=std::sqrt(weights[i]); b[i]=residual[i]*w;
+        for (int j=0; j<cols; ++j) {
+            a[i*cols+j]=H[i*cols+j]*w;
+            if (!std::isfinite(a[i*cols+j])) return false;
+            scale=std::max(scale,std::fabs(a[i*cols+j]));
+        }
+    }
+    for (int j=0; j<cols; ++j) {
+        double norm=0;
+        for (int i=j; i<rows; ++i) norm=std::hypot(norm,a[i*cols+j]);
+        if (norm<=scale*1e-10 || !std::isfinite(norm)) return false;
+        std::vector<double> u(rows-j);
+        for (int i=j; i<rows; ++i) u[i-j]=a[i*cols+j];
+        u[0]+=std::copysign(norm,u[0]);
+        double unorm=0;
+        for (double x:u) unorm=std::hypot(unorm,x);
+        for (double& x:u) x/=unorm;
+        for (int k=j; k<cols; ++k) {
+            double dot=0;
+            for (int i=j; i<rows; ++i) dot+=u[i-j]*a[i*cols+k];
+            for (int i=j; i<rows; ++i) a[i*cols+k]-=2*u[i-j]*dot;
+        }
+        double dot=0;
+        for (int i=j; i<rows; ++i) dot+=u[i-j]*b[i];
+        for (int i=j; i<rows; ++i) b[i]-=2*u[i-j]*dot;
+    }
+    for (int j=cols-1; j>=0; --j) {
+        double v=b[j];
+        for (int k=j+1; k<cols; ++k) v-=a[j*cols+k]*solution[k];
+        solution[j]=v/a[j*cols+j];
+        if (!std::isfinite(solution[j])) return false;
+    }
+    return true;
 }

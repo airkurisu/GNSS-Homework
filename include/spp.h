@@ -1,33 +1,40 @@
-/*
-* include/spp.h - SPP定位与测速核心声明
-* 项目: MYGNSS10
-*/
-
 #ifndef MYGNSS10_SPP_H
 #define MYGNSS10_SPP_H
+#include "rinex.h"
+#include <map>
+#include <string>
+#include <utility>
 
-#include <vector>
-#include "rinex.h" // 需要 ObsData, NavData
-
-// 定义定位结果结构体（可选，用于存储单历元结果）
 struct SPPResult {
-    GPSTime time;
-    double pos[3];  // ECEF x, y, z (m)
-    double vel[3];  // ECEF vx, vy, vz (m/s)
-    double dtr;     // 接收机钟差 (s)
-    double dtr_rate;// 接收机钟漂 (s/s)
-    int nSat;
-    double pdop;
+    GPSTime time{};
+    double pos[3]{}, vel[3]{}; // ECEF m and m/s
+    std::map<char,double> clockBias, clockDrift; // s and s/s, per system
+    int nSat=0, nVel=0;
+    int nRejected=0; // pseudorange outliers removed before the final solution
+    double pdop=0;
+    bool positionValid=false, velocityValid=false;
+    std::string status="no_observations";
 };
 
-/**
- * 执行 SPP 定位与测速主流程
- * @param obsList  所有历元的观测数据
- * @param navList  导航星历数据
- * @param refPos   参考坐标 (ECEF XYZ, 单位:米)，用于计算 ENU 误差，若无则传 {0,0,0}
- */
-void spp_process(const std::vector<std::vector<ObsData>>& obsList,
-                 const std::vector<NavData>& navList,
-                 const double* refPos);
+void ecef2pos(const double* r, double* pos);
+void ecefVectorToEnu(const double* v, const double* reference, double* enu);
+bool observationFrequencies(const ObsData& obs, const NavData& nav, double& f1, double& f2);
 
-#endif // MYGNSS10_SPP_H
+// The solver owns its navigation index; no dangling pointers to the caller's vector.
+class SPPSolver {
+public:
+    explicit SPPSolver(const std::vector<NavData>& navigation);
+    SPPResult solve(const std::vector<ObsData>& epoch, const double* initialPosition,
+                    const std::string& systems="GCER") const;
+    // For diagnostics: same signal/health/age selection as the positioning solver.
+    // Returned pointer remains valid for this solver's lifetime.
+    const NavData* selectEphemeris(const ObsData& observation) const;
+private:
+    std::map<std::pair<char,int>,std::vector<NavData>> navigation_;
+};
+void spp_process(const std::vector<std::vector<ObsData>>& observations,
+                 const std::vector<NavData>& navigation, const double* reference);
+int processObservations(const std::vector<std::vector<ObsData>>& observations,
+                         const std::vector<NavData>& navigation, const double* reference,
+                         const std::string& systems, bool coldStart=false);
+#endif

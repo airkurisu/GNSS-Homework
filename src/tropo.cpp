@@ -72,15 +72,6 @@ static void trop_hopfield_zenith(double P, double T, double e,
     double N_d0 = 77.64 * (P / T);
     double N_w0 = -12.96 * (e / T) + 3.718e5 * (e / (T * T));
 
-    *zhd = 1.552e-5 * (P / T) * h_dry; // 化简后的公式
-    *zwd = 1.552e-5 * (N_w0 / 77.64) * h_wet; // 类似的比例关系
-
-    // 或者使用更严谨的积分化简形式:
-    // ZHD = 1e-6 * N_d0 * h_dry / 5.0;
-    // ZWD = 1e-6 * N_w0 * h_wet / 5.0;
-    // 上面的 1.552e-5 其实就是 77.6 * 1e-6 / 5 * h_factor...
-    // 为了严谨，我们用标准展开式：
-
     *zhd = 1.0e-6 / 5.0 * N_d0 * h_dry;
     *zwd = 1.0e-6 / 5.0 * N_w0 * h_wet;
 }
@@ -125,23 +116,6 @@ static void trop_nmf(GPSTime time, const double *pos, double el,
     double lat = fabs(pos[0] * 180.0 / PI); // 纬度转为度，取绝对值
     double h = pos[2];
     double doy = time2doy(time); // 年积日
-
-    // 1. 确定纬度插值索引
-    int i;
-    if      (lat <= 15.0) i = 0;
-    else if (lat <= 30.0) i = 1;
-    else if (lat <= 45.0) i = 2;
-    else if (lat <= 60.0) i = 3;
-    else                  i = 4; // lat > 75 实际上通常用 75 的值或外推，这里简化为用 i=4
-
-    // 2. 计算干分量系数 (Dry Coefficients)
-    // 需要对纬度进行线性插值
-    double a_d, b_d, c_d;
-    double zeros[3] = {0}; // 临时用
-
-    // 为了简化代码，这里实现简单的线性插值逻辑
-    // 实际 NMF 逻辑：如果 lat 在 15-75 之间，在两个节点间插值
-    // 公式: val = val_i + (val_{i+1} - val_i) * (lat - lat_i) / (lat_{i+1} - lat_i)
 
     double coef_d[3]; // 最终的 a, b, c
 
@@ -219,7 +193,7 @@ int trop_model_prec(GPSTime time, const double *pos, const double *azel,
 {
     // 1. 检查高度角
     double el = azel[1];
-    if (el < 3.0 * PI / 180.0) { // 极低高度角不计算
+    if (!std::isfinite(el) || !std::isfinite(pos[0]) || !std::isfinite(pos[2]) || el < 3.0 * PI / 180.0) { // 极低高度角不计算
         *trop = 0.0;
         if (var) *var = 0.0;
         return 0;

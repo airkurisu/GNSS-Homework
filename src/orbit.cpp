@@ -1,12 +1,3 @@
-
-/*
- * src/orbit.cpp - 卫星轨道计算 (最终修正版: 修复变量作用域编译错误)
- * 修正记录:
- * 1. [COMPILATION] 提前声明 Omega, dOmega 等变量，修复 'Omega was not declared' 错误。
- * 2. [BDS GEO] 保留了之前的 5度旋转和 Coriolis 修正逻辑。
- * 3. [GLONASS] 保留了闰秒修正。
- */
-
 #include "orbit.h"
 #include <cmath>
 #include <iostream>
@@ -49,7 +40,7 @@ static void satPosKepler(GPSTime tTx, const NavData& nav, double* rs, double* vs
     double tk = timediff(tTx, nav.toe);
 
     // [BDS 时间修正] BDT -> GPST (14s)
-    if (nav.sys == 'C') tk -= 14.0;
+    // BDT was already converted to GPST by the reader.
 
     // 2. 平近点角 M
     double A = nav.sqrtA * nav.sqrtA;
@@ -110,7 +101,7 @@ static void satPosKepler(GPSTime tTx, const NavData& nav, double* rs, double* vs
         // --- BDS GEO 特殊处理 (ICD 5.1.4) ---
         
         // A. 计算升交点经度 Omega (不减 Omega_e * tk)
-        Omega = nav.Omega0 + nav.OmegaDot * tk - OMEGA_VAL * nav.toe.sec;
+        Omega = nav.Omega0 + nav.OmegaDot * tk - OMEGA_VAL * nav.toeSow;
         dOmega = nav.OmegaDot; 
 
         double sinO = sin(Omega), cosO = cos(Omega);
@@ -166,7 +157,7 @@ static void satPosKepler(GPSTime tTx, const NavData& nav, double* rs, double* vs
 
     } else {
         // --- MEO / IGSO (标准公式) ---
-        Omega = nav.Omega0 + (nav.OmegaDot - OMEGA_VAL) * tk - OMEGA_VAL * nav.toe.sec;
+        Omega = nav.Omega0 + (nav.OmegaDot - OMEGA_VAL) * tk - OMEGA_VAL * nav.toeSow;
         dOmega = nav.OmegaDot - OMEGA_VAL;
 
         double sinO = sin(Omega), cosO = cos(Omega);
@@ -191,15 +182,18 @@ static void satPosKepler(GPSTime tTx, const NavData& nav, double* rs, double* vs
     rs[0] = x_final; rs[1] = y_final; rs[2] = z_final;
     if (vs) { vs[0] = vx_final; vs[1] = vy_final; vs[2] = vz_final; }
 
+    const double tc = timediff(tTx, nav.toc);
+
     // 9. 卫星钟差
     if (dts) {
-        *dts = nav.a0 + nav.a1 * tk + nav.a2 * tk * tk;
+        *dts = nav.a0 + nav.a1 * tc + nav.a2 * tc * tc;
         *dts -= 2.0 * sqrt(GM_VAL * A) * nav.e * sinE / (CLIGHT_VAL * CLIGHT_VAL);
     }
 
     // 10. 卫星钟漂
     if (dts_drift) {
-        *dts_drift = nav.a1 + 2.0 * nav.a2 * tk;
+        *dts_drift = nav.a1 + 2.0 * nav.a2 * tc
+            - 2.0 * sqrt(GM_VAL * A) * nav.e * cosE * Edot / (CLIGHT_VAL * CLIGHT_VAL);
     }
 }
 
@@ -242,8 +236,8 @@ static void glonass_orbit(double t, double *x, const double *acc) {
 
 void satPosVel(GPSTime tTx, const NavData& nav, double* rs, double* vs, double* dts, double* dts_drift) {
     if (nav.sys == 'R') {
-        double x[6] = { nav.M0, nav.e, nav.sqrtA, nav.Omega0, nav.i0, nav.omega };
-        double acc[3] = { nav.cuc, nav.cus, nav.crc };
+        double x[6] = { nav.gloPos[0], nav.gloPos[1], nav.gloPos[2], nav.gloVel[0], nav.gloVel[1], nav.gloVel[2] };
+        double acc[3] = { nav.gloAcc[0], nav.gloAcc[1], nav.gloAcc[2] };
         double t = timediff(tTx, nav.toe);
         //t -= 18.0; // 闰秒修正
         glonass_orbit(t, x, acc);
